@@ -9,9 +9,9 @@ fn main() {
     }
 
     let filename = &args[1];
-
     let content = fs::read_to_string(filename).unwrap();
-    let file = syn::parse_file(&content).unwrap();
 
-    print!("{}", prettyplease::unparse(&file));
+    let formatted = cargo_plsfmt::format_file(&content);
+
+    print!("{}", formatted);
 }
