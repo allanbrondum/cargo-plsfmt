@@ -1,5 +1,4 @@
-use proc_macro2::{LineColumn, Span};
-use std::collections::HashMap;
+use proc_macro2::Span;
 
 pub struct Replacement {
     span: Span,
@@ -12,42 +11,17 @@ impl Replacement {
     }
 }
 
-#[derive(Default)]
-struct LineMap {
-    map: HashMap<usize, usize>,
-}
-
-impl LineMap {
-    fn idx(&self, line_col: LineColumn) -> usize {
-        self.map.get(&line_col.line).expect("line") + line_col.column
-    }
-}
-
-fn line_map(content: &str) -> LineMap {
-    let mut ret = LineMap::default();
-
-    let mut idx = 0;
-    for (line_number, line) in content.lines().enumerate() {
-        let line_number = line_number + 1;
-        ret.map.insert(line_number, idx);
-        idx += line.len() + 1;
-    }
-    ret
-}
-
 pub fn replace(content: &str, mut replacements: Vec<Replacement>) -> String {
     replacements.sort_by_key(|repl| repl.span.start());
-    let line_map = line_map(content);
 
     let mut out = String::new();
     let mut cursor = 0;
     for repl in replacements {
-        let start_idx = line_map.idx(repl.span.start());
-        out.push_str(&content[cursor..start_idx]);
+        out.push_str(&content[cursor..repl.span.byte_range().start]);
         out.push_str(&repl.replacement);
-        cursor = line_map.idx(repl.span.end());
+        cursor = repl.span.byte_range().end;
     }
-    out.push_str(&content[cursor..]);
+    out.push_str(std::str::from_utf8(&content.as_bytes()[cursor..]).unwrap());
 
     out
 }
@@ -56,7 +30,6 @@ pub fn replace(content: &str, mut replacements: Vec<Replacement>) -> String {
 mod test {
     use super::*;
     use proc_macro2::TokenStream;
-    use quote::__private::ext::RepToTokensExt;
     use std::str::FromStr;
 
     #[test]
