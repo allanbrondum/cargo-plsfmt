@@ -1,17 +1,36 @@
-use std::{env, fs, process};
+use clap::{Parser, ValueEnum};
+use std::fs;
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+#[clap(rename_all = "kebab-case")]
+pub enum EmitMode {
+    /// Emits to files.
+    Files,
+    /// Writes the output to stdout.
+    Stdout,
+}
+
+#[derive(Parser)]
+pub struct Args {
+    #[arg(long = "emit", value_enum, default_value_t = EmitMode::Files)]
+    emit_mode: EmitMode,
+
+    files: Vec<String>,
+}
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
+    let args = Args::parse();
 
-    if args.len() < 2 {
-        eprintln!("Usage: {} <filename>", args[0]);
-        process::exit(1);
+    for filename in &args.files {
+        let content = fs::read_to_string(filename).unwrap();
+
+        let formatted = cargo_plsfmt::format_file(&content);
+
+        match args.emit_mode {
+            EmitMode::Files => fs::write(filename, formatted).unwrap(),
+            EmitMode::Stdout => {
+                print!("{}", formatted);
+            }
+        }
     }
-
-    let filename = &args[1];
-    let content = fs::read_to_string(filename).unwrap();
-
-    let formatted = cargo_plsfmt::format_file(&content);
-
-    print!("{}", formatted);
 }
