@@ -1,11 +1,9 @@
-use std::cmp::Ordering;
+use cargo_metadata::Package;
+use clap::Parser;
 use std::collections::BTreeSet;
 use std::env;
 use std::fs;
-use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
-
-use clap::Parser;
 
 #[derive(Parser)]
 #[command(styles = clap_cargo::style::CLAP_STYLING)]
@@ -33,55 +31,31 @@ fn main() {
     let opts = Opts::parse_from(args);
     let strategy = FmtStrategy::from_opts(&opts);
 
-    format_crate(&strategy);
+    format_workspace(&strategy);
 }
 
-fn format_crate(strategy: &FmtStrategy) {
-    let _targets = get_targets(strategy);
+fn format_workspace(strategy: &FmtStrategy) {
+    let packages = get_packages(strategy);
 
-    // todo
-}
-
-#[derive(Debug)]
-pub struct Target {
-    path: PathBuf,
-}
-
-impl Target {
-    pub fn from_target(target: &cargo_metadata::Target) -> Self {
-        let path = PathBuf::from(&target.src_path);
-        let canonicalized = fs::canonicalize(&path).unwrap_or(path);
-
-        Target {
-            path: canonicalized,
+    for package in packages {
+        for file in files_in_package(&package) {
+            format_file(&file);
         }
     }
 }
 
-impl PartialEq for Target {
-    fn eq(&self, other: &Target) -> bool {
-        self.path == other.path
-    }
+fn format_file(file: &PathBuf) {
+    let content = fs::read_to_string(file).unwrap();
+    let formatted = cargo_plsfmt::format_file(&content);
+    fs::write(file, formatted).unwrap();
 }
 
-impl PartialOrd for Target {
-    fn partial_cmp(&self, other: &Target) -> Option<Ordering> {
-        Some(self.path.cmp(&other.path))
-    }
-}
+fn files_in_package(package: &Package) -> impl Iterator<Item = PathBuf> {
+    let src_dir = package.manifest_path.parent().unwrap().join("src");
 
-impl Ord for Target {
-    fn cmp(&self, other: &Target) -> Ordering {
-        self.path.cmp(&other.path)
-    }
-}
-
-impl Eq for Target {}
-
-impl Hash for Target {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.path.hash(state);
-    }
+    glob::glob(&format!("{}/**/*.rs", src_dir))
+        .expect("Failed to read source directory")
+        .filter_map(Result::ok)
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -100,18 +74,14 @@ impl FmtStrategy {
     }
 }
 
-fn get_targets(strategy: &FmtStrategy) -> BTreeSet<Target> {
-    let mut targets = BTreeSet::new();
-
+fn get_packages(strategy: &FmtStrategy) -> Vec<Package> {
     match *strategy {
-        FmtStrategy::Root => get_targets_root_only(&mut targets),
-        FmtStrategy::Packages(ref hitlist) => get_targets_with_hitlist(hitlist, &mut targets),
+        FmtStrategy::Root => get_packages_root_only(),
+        FmtStrategy::Packages(ref hitlist) => get_packages_with_hitlist(hitlist),
     }
-
-    targets
 }
 
-fn get_targets_root_only(targets: &mut BTreeSet<Target>) {
+fn get_packages_root_only() -> Vec<Package> {
     let metadata = get_cargo_metadata();
     let workspace_root_path = PathBuf::from(&metadata.workspace_root)
         .canonicalize()
@@ -121,8 +91,8 @@ fn get_targets_root_only(targets: &mut BTreeSet<Target>) {
     let in_workspace_root = workspace_root_path == current_dir;
     let current_dir_manifest = current_dir.join("Cargo.toml");
 
-    let package_targets = match metadata.packages.len() {
-        1 => metadata.packages.into_iter().next().unwrap().targets,
+    match metadata.packages.len() {
+        1 => metadata.packages,
         _ => metadata
             .packages
             .into_iter()
@@ -133,31 +103,26 @@ fn get_targets_root_only(targets: &mut BTreeSet<Target>) {
                         .unwrap_or_default()
                         == current_dir_manifest
             })
-            .flat_map(|p| p.targets)
             .collect(),
-    };
-
-    for target in package_targets {
-        targets.insert(Target::from_target(&target));
     }
 }
 
-fn get_targets_with_hitlist(hitlist: &[String], targets: &mut BTreeSet<Target>) {
+fn get_packages_with_hitlist(hitlist: &[String]) -> Vec<Package> {
     let metadata = get_cargo_metadata();
     let mut workspace_hitlist: BTreeSet<&String> = BTreeSet::from_iter(hitlist);
 
-    for package in metadata.packages {
-        if workspace_hitlist.remove(&package.name) {
-            for target in package.targets {
-                targets.insert(Target::from_target(&target));
-            }
-        }
-    }
+    let packages = metadata
+        .packages
+        .into_iter()
+        .filter(|package| workspace_hitlist.remove(&package.name))
+        .collect();
 
     if !workspace_hitlist.is_empty() {
         let package = workspace_hitlist.iter().next().unwrap();
         panic!("package `{package}` is not a member of the workspace");
     }
+
+    packages
 }
 
 fn get_cargo_metadata() -> cargo_metadata::Metadata {
