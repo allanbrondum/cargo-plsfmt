@@ -46,7 +46,7 @@ fn format_workspace(strategy: &FmtStrategy) {
 
 fn format_file(file: &PathBuf) {
     let content = fs::read_to_string(file).unwrap();
-    let formatted = cargo_plsfmt::format_file(&content);
+    let formatted = plsfmt::format_file(&content);
     fs::write(file, formatted).unwrap();
 }
 

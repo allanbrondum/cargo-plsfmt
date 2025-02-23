@@ -24,7 +24,7 @@ fn main() {
     for filename in &args.files {
         let content = fs::read_to_string(filename).unwrap();
 
-        let formatted = cargo_plsfmt::format_file(&content);
+        let formatted = plsfmt::format_file(&content);
 
         match args.emit_mode {
             EmitMode::Files => fs::write(filename, formatted).unwrap(),

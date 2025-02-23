@@ -1,5 +1,5 @@
 [package]
-name = "cargo-plsfmt"
+name = "plsfmt"
 version = "0.1.0"
 edition = "2024"
 
