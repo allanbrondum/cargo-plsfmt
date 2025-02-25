@@ -1,5 +1,5 @@
-mod replacement;
 mod macros;
+mod replacement;
 
 use crate::replacement::Replacement;
 use syn::spanned::Spanned;
@@ -13,15 +13,11 @@ struct MacroVisitor<'ast> {
 
 impl<'ast> visit::Visit<'ast> for MacroVisitor<'ast> {
     fn visit_macro(&mut self, mac: &'ast Macro) {
-        if let Some(ident) = mac
-            .path
-            .segments
-            .last().map(|seg|&seg.ident) {
+        if let Some(ident) = mac.path.segments.last().map(|seg| &seg.ident) {
             if ident == "select" {
                 self.select_macros.push(mac);
             }
         }
-
     }
 }
 
@@ -38,4 +34,3 @@ pub fn format_file(content: &str) -> String {
 
     replacement::replace(content, replacements)
 }
-
