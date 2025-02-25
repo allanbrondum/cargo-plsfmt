@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-prettyplease = "0.2.29"
+prettyplease = { version = "0.2.29", git = "https://github.com/allanbrondum/prettyplease.git" }
 syn = { version = "2.0.98", features = ["visit"] }
 proc-macro2 = { version = "1.0.93", features = ["span-locations"] }
 clap = { version = "4.5.30", features = ["derive"] }

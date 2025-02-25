@@ -192,8 +192,7 @@ dependencies = [
 [[package]]
 name = "prettyplease"
 version = "0.2.29"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6924ced06e1f7dfe3fa48d57b9f74f55d8915f5036121bef647ef4b204895fac"
+source = "git+https://github.com/allanbrondum/prettyplease.git#b206eaec5cbf96af109b984641f482af467f264c"
 dependencies = [
  "proc-macro2",
  "syn",
