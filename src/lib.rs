@@ -2,8 +2,6 @@ mod macros;
 mod replacement;
 
 use crate::macros::select;
-use crate::replacement::Replacement;
-use syn::spanned::Spanned;
 use syn::visit::Visit;
 use syn::{Macro, visit};
 

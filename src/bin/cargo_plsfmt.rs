@@ -8,13 +8,10 @@ use std::path::PathBuf;
 #[derive(Parser)]
 #[command(styles = clap_cargo::style::CLAP_STYLING)]
 pub struct Opts {
-    #[arg(
-        short = 'p',
-        long = "package",
-        value_name = "package",
-        num_args = 1..
-    )]
-    packages: Vec<String>,
+    #[arg(short = 'p', long = "package", value_name = "package")]
+    package: String,
+
+    pattern: Option<String>,
 }
 
 fn main() {
@@ -31,14 +28,14 @@ fn main() {
     let opts = Opts::parse_from(args);
     let strategy = FmtStrategy::from_opts(&opts);
 
-    format_workspace(&strategy);
+    format_workspace(&strategy, opts.pattern.as_deref());
 }
 
-fn format_workspace(strategy: &FmtStrategy) {
+fn format_workspace(strategy: &FmtStrategy, pattern: Option<&str>) {
     let packages = get_packages(strategy);
 
     for package in packages {
-        for file in files_in_package(&package) {
+        for file in files_in_package(&package, pattern) {
             format_file(&file);
         }
     }
@@ -50,12 +47,19 @@ fn format_file(file: &PathBuf) {
     fs::write(file, formatted).unwrap();
 }
 
-fn files_in_package(package: &Package) -> impl Iterator<Item = PathBuf> {
+fn files_in_package(package: &Package, pattern: Option<&str>) -> impl Iterator<Item = PathBuf> {
     let src_dir = package.manifest_path.parent().unwrap().join("src");
 
     glob::glob(&format!("{}/**/*.rs", src_dir))
         .expect("Failed to read source directory")
         .filter_map(Result::ok)
+        .filter(move |file| {
+            pattern.is_none_or(|pat| {
+                file.to_str()
+                    .and_then(|str| str.strip_prefix(src_dir.as_str()))
+                    .is_some_and(|str| str.contains(pat))
+            })
+        })
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -66,10 +70,10 @@ pub enum FmtStrategy {
 
 impl FmtStrategy {
     pub fn from_opts(opts: &Opts) -> FmtStrategy {
-        if opts.packages.is_empty() {
+        if opts.package.is_empty() {
             FmtStrategy::Root
         } else {
-            FmtStrategy::Packages(opts.packages.clone())
+            FmtStrategy::Packages(vec![opts.package.clone()])
         }
     }
 }

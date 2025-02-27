@@ -3,11 +3,10 @@ use prettyplease::algorithm::{BreakToken, Printer};
 use prettyplease::fixup::FixupContext;
 use prettyplease::iter::IterDelimited;
 use prettyplease::{INDENT, expr, stmt};
-use syn::parse::discouraged::AnyDelimiter;
 use syn::parse::{Parse, ParseStream, Parser};
 use syn::spanned::Spanned;
 use syn::token::Comma;
-use syn::{Block, Expr, ExprBlock, Macro, Pat, Stmt, Token, token};
+use syn::{Expr, Macro, Pat, Stmt, Token};
 
 pub fn select_replace(mac: &Macro) -> Option<Replacement> {
     let select_syntax = Parser::parse2(Select::parse, mac.tokens.clone()).ok()?;
@@ -15,12 +14,6 @@ pub fn select_replace(mac: &Macro) -> Option<Replacement> {
     let mut printer = prettyplease::algorithm::Printer::new();
     let base_indent = mac.path.span().start().column as isize;
     select(&mut printer, &select_syntax, base_indent);
-
-    let a = 0;
-    match a {
-        1 => (),
-        _ => (),
-    }
 
     Some(Replacement::new(mac.delimiter.span().span(), printer.eof()))
 }
@@ -101,10 +94,13 @@ struct Select {
 
 struct Arm {
     pat: Pat,
+    #[allow(unused)]
     eq: Token![=],
     future: Expr,
+    #[allow(unused)]
     fat_arrow: Token![=>],
     body: Expr,
+    #[allow(unused)]
     comma: Option<Comma>,
 }
 
@@ -187,16 +183,16 @@ fn requires_comma_to_be_match_arm(expr: &Expr) -> syn::Result<bool> {
         | Expr::Unary(_)
         | Expr::Yield(_)
         | Expr::Verbatim(_) => Ok(true),
-        _ => Err(syn::Error::new(expr.span(), format!("unhandled expression"))),
+        _ => Err(syn::Error::new(expr.span(), "unhandled expression")),
     }
 }
 
 #[cfg(test)]
 mod test {
-    use super::*;
+
     use crate::macros::select::Select;
     use crate::{assert_eq_text, format_file};
-    use proc_macro2::LineColumn;
+
     use syn::Macro;
     use syn::parse::{Parse, Parser};
 

@@ -1,5 +1,3 @@
-use std::fmt;
-
 #[macro_export]
 macro_rules! assert_eq_text {
     ($left:expr, $right:expr) => {
