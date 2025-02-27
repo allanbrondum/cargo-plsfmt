@@ -1,12 +1,105 @@
 use crate::replacement::Replacement;
+use prettyplease::algorithm::{BreakToken, Printer};
+use prettyplease::fixup::FixupContext;
+use prettyplease::iter::IterDelimited;
+use prettyplease::{INDENT, expr, stmt};
 use syn::parse::discouraged::AnyDelimiter;
-use syn::parse::{Parse, ParseStream};
+use syn::parse::{Parse, ParseStream, Parser};
 use syn::spanned::Spanned;
 use syn::token::Comma;
-use syn::{Expr, Macro, Pat, Token};
+use syn::{Expr, Macro, Pat, Stmt, Token};
 
-pub fn select_replace(mac: &Macro) -> Replacement {
-    todo!()
+pub fn select_replace(mac: &Macro) -> Option<Replacement> {
+    let select_syntax = Parser::parse2(Select::parse, mac.tokens.clone()).ok()?;
+
+    let mut printer = prettyplease::algorithm::Printer::new();
+    let base_indent = mac.path.span().start().column as isize;
+    select(&mut printer, &select_syntax, base_indent);
+
+    Some(Replacement::new(mac.delimiter.span().span(), printer.eof()))
+}
+
+fn select(printer: &mut Printer, select_syntax: &Select, base_indent: isize) {
+    printer.word("{");
+    printer.neverbreak();
+    printer.cbox(INDENT + base_indent);
+    printer.hardbreak_if_nonempty();
+    for arm_syntax in &select_syntax.arms {
+        arm(printer, arm_syntax);
+        printer.hardbreak();
+    }
+    printer.offset(-INDENT);
+    printer.end();
+    printer.word("}");
+}
+
+fn arm(printer: &mut Printer, arm_syntax: &Arm) {
+    printer.ibox(0);
+    printer.pat(&arm_syntax.pat);
+    printer.word(" = ");
+    printer.expr(&arm_syntax.future, FixupContext::NONE); // todo
+    printer.word(" => ");
+
+    let mut body = &arm_syntax.body;
+    while let Expr::Block(expr) = body {
+        if expr.attrs.is_empty() && expr.label.is_none() {
+            let mut stmts = expr.block.stmts.iter();
+            if let (Some(Stmt::Expr(inner, None)), None) = (stmts.next(), stmts.next()) {
+                body = inner;
+                continue;
+            }
+        }
+        break;
+    }
+    // if let Expr::Tuple(expr) = body {
+    //     if expr.elems.is_empty() && expr.attrs.is_empty() {
+    //         empty_block = Expr::Block(ExprBlock {
+    //             attrs: Vec::new(),
+    //             label: None,
+    //             block: Block {
+    //                 brace_token: token::Brace::default(),
+    //                 stmts: Vec::new(),
+    //             },
+    //         });
+    //         body = &empty_block;
+    //     }
+    // }
+
+    if let Expr::Block(body) = body {
+        if let Some(label) = &body.label {
+            printer.label(label);
+        }
+        printer.word("{");
+        printer.neverbreak();
+        printer.cbox(INDENT);
+        printer.hardbreak_if_nonempty();
+        printer.inner_attrs(&body.attrs);
+        for stmt in body.block.stmts.iter().delimited() {
+            printer.stmt(&stmt, stmt.is_last);
+        }
+        printer.offset(-INDENT);
+        printer.end();
+        printer.word("}");
+    } else {
+        printer.neverbreak();
+        printer.cbox(INDENT);
+        let okay_to_brace = expr::parseable_as_stmt(body);
+        printer.scan_break(BreakToken {
+            pre_break: Some(if okay_to_brace { '{' } else { '(' }),
+            ..BreakToken::default()
+        });
+        printer.expr_beginning_of_line(body, false, true, FixupContext::new_match_arm());
+        printer.scan_break(BreakToken {
+            offset: -INDENT,
+            pre_break: (okay_to_brace && stmt::add_semi(body)).then_some(';'),
+            post_break: if okay_to_brace { "}" } else { ")," },
+            no_break: requires_comma_to_be_match_arm(body).unwrap().then_some(','),
+            ..BreakToken::default()
+        });
+        printer.end();
+    }
+
+    printer.end();
 }
 
 struct Select {
@@ -107,7 +200,10 @@ fn requires_comma_to_be_match_arm(expr: &Expr) -> syn::Result<bool> {
 
 #[cfg(test)]
 mod test {
+    use super::*;
     use crate::macros::select::Select;
+    use crate::{assert_eq_text, format_file};
+    use proc_macro2::LineColumn;
     use syn::Macro;
     use syn::parse::{Parse, Parser};
 
@@ -171,5 +267,109 @@ select! {
 
         let mac: Macro = syn::parse_str(code).unwrap();
         let select = Parser::parse2(Select::parse, mac.tokens).unwrap();
+    }
+
+    #[test]
+    fn test_replace_select_braced_expr() {
+        let code = r#"
+fn func() {
+    loop {
+        select! {
+            val1 = future1.expr() => {
+                stmt();
+                a.expr()
+            }
+            val2 = future2.expr() => {
+                stmt();
+                b.expr()
+            }
+        }
+    }
+}
+        "#;
+
+        let formatted = format_file(code);
+
+        assert_eq_text!(formatted, code);
+    }
+
+    #[test]
+    fn test_replace_select_unbraced_expr() {
+        let code = r#"
+fn func() {
+    loop {
+        select! {
+            val1 = future1.expr() => a.expr(),
+            val2 = future2.expr() => b.expr(),
+        }
+    }
+}
+        "#;
+
+        let formatted = format_file(code);
+
+        assert_eq_text!(formatted, code);
+    }
+
+    #[test]
+    fn test_replace_select_unbrace() {
+        let code = r#"
+fn func() {
+    loop {
+        select! {
+            val1 = future1.expr() => {
+                a.expr()
+            }
+            val2 = future2.expr() => {
+                b.expr()
+            }
+        }
+    }
+}
+        "#;
+
+        let formatted = format_file(code);
+
+        let expected_formatted = r#"
+fn func() {
+    loop {
+        select! {
+            val1 = future1.expr() => a.expr(),
+            val2 = future2.expr() => b.expr(),
+        }
+    }
+}
+        "#;
+
+        assert_eq_text!(formatted, expected_formatted);
+    }
+
+    #[test]
+    fn test_replace_select_brace() {
+        let code = r#"
+fn func() {
+    loop {
+        select! {
+            val1 = future1.expr() => a.expr().expr().expr().expr().expr().expr().expr().expr().expr().expr(),
+        }
+    }
+}
+        "#;
+
+        let formatted = format_file(code);
+
+        let expected_formatted = r#"
+fn func() {
+    loop {
+        select! {
+            val1 = future1.expr() => {
+                a.expr().expr().expr().expr().expr().expr().expr().expr().expr().expr()
+            }
+        }
+    }
+}
+        "#;
+
+        assert_eq_text!(formatted, expected_formatted);
     }
 }

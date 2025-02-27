@@ -1,8 +1,8 @@
 use proc_macro2::Span;
 
 pub struct Replacement {
-    span: Span,
-    replacement: String,
+    pub span: Span,
+    pub replacement: String,
 }
 
 impl Replacement {

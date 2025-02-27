@@ -1,6 +1,7 @@
 mod macros;
 mod replacement;
 
+use crate::macros::select;
 use crate::replacement::Replacement;
 use syn::spanned::Spanned;
 use syn::visit::Visit;
@@ -29,7 +30,7 @@ pub fn format_file(content: &str) -> String {
 
     let mut replacements = Vec::new();
     for mac in &visitor.select_macros {
-        replacements.push(Replacement::new(mac.tokens.span(), String::new()));
+        replacements.extend(select::select_replace(mac));
     }
 
     replacement::replace(content, replacements)
