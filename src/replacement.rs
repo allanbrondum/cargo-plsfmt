@@ -1,5 +1,7 @@
 use proc_macro2::Span;
 
+// todo preserve comments
+
 pub struct Replacement {
     pub span: Span,
     pub replacement: String,

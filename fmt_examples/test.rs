@@ -52,5 +52,10 @@ fn test() {
         market_event_tx.send(items)?;
     }
 
+    let a = 0;
+    match a {
+        1 => (),
+        _ => (),
+    }
 
 }

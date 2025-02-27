@@ -7,7 +7,7 @@ use syn::parse::discouraged::AnyDelimiter;
 use syn::parse::{Parse, ParseStream, Parser};
 use syn::spanned::Spanned;
 use syn::token::Comma;
-use syn::{Expr, Macro, Pat, Stmt, Token};
+use syn::{Block, Expr, ExprBlock, Macro, Pat, Stmt, Token, token};
 
 pub fn select_replace(mac: &Macro) -> Option<Replacement> {
     let select_syntax = Parser::parse2(Select::parse, mac.tokens.clone()).ok()?;
@@ -15,6 +15,12 @@ pub fn select_replace(mac: &Macro) -> Option<Replacement> {
     let mut printer = prettyplease::algorithm::Printer::new();
     let base_indent = mac.path.span().start().column as isize;
     select(&mut printer, &select_syntax, base_indent);
+
+    let a = 0;
+    match a {
+        1 => (),
+        _ => (),
+    }
 
     Some(Replacement::new(mac.delimiter.span().span(), printer.eof()))
 }
@@ -51,19 +57,6 @@ fn arm(printer: &mut Printer, arm_syntax: &Arm) {
         }
         break;
     }
-    // if let Expr::Tuple(expr) = body {
-    //     if expr.elems.is_empty() && expr.attrs.is_empty() {
-    //         empty_block = Expr::Block(ExprBlock {
-    //             attrs: Vec::new(),
-    //             label: None,
-    //             block: Block {
-    //                 brace_token: token::Brace::default(),
-    //                 stmts: Vec::new(),
-    //             },
-    //         });
-    //         body = &empty_block;
-    //     }
-    // }
 
     if let Expr::Block(body) = body {
         if let Some(label) = &body.label {
