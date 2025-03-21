@@ -36,7 +36,7 @@ fn arm(printer: &mut Printer, arm_syntax: &Arm) {
     printer.ibox(0);
     printer.pat(&arm_syntax.pat);
     printer.word(" = ");
-    printer.expr(&arm_syntax.future, FixupContext::NONE); // todo
+    printer.expr(&arm_syntax.future, FixupContext::NONE);
     printer.word(" => ");
 
     let mut body = &arm_syntax.body;
