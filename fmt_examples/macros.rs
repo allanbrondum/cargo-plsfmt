@@ -38,10 +38,11 @@ async fn run(mut backend: RpcBackend) -> ActorResult<()> {
     loop {
         select! {
             frontend_msg = backend.frontend_handle.recv() => {
+                // comment1
                 backend.process_frontend_msg(frontend_msg?);
             }
             _ = backend.client.ws_client.on_disconnect() => {
-                return Err(anyhow!("pyth agent client disconnected").into());
+                return Err(anyhow!("pyth agent client disconnected").into()); // comment2
             }
         }
     }
