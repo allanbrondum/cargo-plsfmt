@@ -9,7 +9,7 @@ use std::path::PathBuf;
 #[command(styles = clap_cargo::style::CLAP_STYLING)]
 pub struct Opts {
     #[arg(short = 'p', long = "package", value_name = "package")]
-    package: String,
+    package: Option<String>,
 
     pattern: Option<String>,
 }
@@ -70,10 +70,10 @@ pub enum FmtStrategy {
 
 impl FmtStrategy {
     pub fn from_opts(opts: &Opts) -> FmtStrategy {
-        if opts.package.is_empty() {
-            FmtStrategy::Root
+        if let Some(package) = opts.package.as_ref() {
+            FmtStrategy::Packages(vec![package.clone()])
         } else {
-            FmtStrategy::Packages(vec![opts.package.clone()])
+            FmtStrategy::Root
         }
     }
 }

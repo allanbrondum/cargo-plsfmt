@@ -192,6 +192,7 @@ dependencies = [
 [[package]]
 name = "prettyplease"
 version = "0.2.29"
+source = "git+https://github.com/allanbrondum/prettyplease.git#14d084f53740dc5a881b3ff3bcb1fe781aec0165"
 dependencies = [
  "proc-macro2",
  "syn",
