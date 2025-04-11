@@ -1,21 +1,27 @@
+mod comments;
+mod macro_factory_binding;
+mod macro_syntax;
 mod macros;
-mod replacement;
+mod model;
+mod replace;
 
-use crate::macros::select;
+use crate::macro_factory_binding::parse_macro_syntax;
+use crate::model::ParsedMacro;
 use syn::visit::Visit;
 use syn::{Macro, visit};
 
 #[derive(Default)]
 struct MacroVisitor<'ast> {
-    select_macros: Vec<&'ast Macro>,
+    parsed_macros: Vec<ParsedMacro<'ast>>,
 }
 
 impl<'ast> visit::Visit<'ast> for MacroVisitor<'ast> {
     fn visit_macro(&mut self, mac: &'ast Macro) {
-        if let Some(ident) = mac.path.segments.last().map(|seg| &seg.ident) {
-            if ident == "select" {
-                self.select_macros.push(mac);
-            }
+        if let Some(macro_syntax) = parse_macro_syntax(mac) {
+            self.parsed_macros.push(ParsedMacro {
+                macro_syntax,
+                syn_macro: mac,
+            });
         }
     }
 }
@@ -26,10 +32,7 @@ pub fn format_file(content: &str) -> String {
     let mut visitor = MacroVisitor::default();
     visitor.visit_file(&file);
 
-    let mut replacements = Vec::new();
-    for mac in &visitor.select_macros {
-        replacements.extend(select::select_replace(mac));
-    }
+    // let comments = comments::scan_comments(content);
 
-    replacement::replace(content, replacements)
+    replace::replace(content, visitor.parsed_macros)
 }

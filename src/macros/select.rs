@@ -1,4 +1,4 @@
-use crate::replacement::Replacement;
+use crate::macro_syntax::{MacroFactory, MacroSyntax};
 use prettyplease::algorithm::{BreakToken, Printer};
 use prettyplease::fixup::FixupContext;
 use prettyplease::iter::IterDelimited;
@@ -8,17 +8,83 @@ use syn::spanned::Spanned;
 use syn::token::Comma;
 use syn::{Expr, Macro, Pat, Stmt, Token};
 
-pub fn select_replace(mac: &Macro) -> Option<Replacement> {
-    let select_syntax = Parser::parse2(Select::parse, mac.tokens.clone()).ok()?;
+pub struct SelectFactory;
 
-    let mut printer = prettyplease::algorithm::Printer::new();
-    let base_indent = mac.path.span().start().column as isize;
-    select(&mut printer, &select_syntax, base_indent);
+impl MacroFactory for SelectFactory {
+    fn name() -> &'static str {
+        "select"
+    }
 
-    Some(Replacement::new(mac.delimiter.span().span(), printer.eof()))
+    fn parse(mac: &Macro) -> Option<Box<dyn MacroSyntax>> {
+        Some(Box::new(
+            Parser::parse2(SelectSyntax::parse, mac.tokens.clone()).ok()?,
+        ))
+    }
 }
 
-fn select(printer: &mut Printer, select_syntax: &Select, base_indent: isize) {
+impl MacroSyntax for SelectSyntax {
+    fn delimiter_replacement(&self, base_indent: isize) -> String {
+        let mut printer = prettyplease::algorithm::Printer::new();
+        // let base_indent = mac.path.span().start().column as isize;
+        select(&mut printer, self, base_indent);
+        printer.eof()
+    }
+}
+
+struct SelectSyntax {
+    arms: Vec<ArmSyntax>,
+}
+
+struct ArmSyntax {
+    pat: Pat,
+    #[allow(unused)]
+    eq: Token![=],
+    future: Expr,
+    #[allow(unused)]
+    fat_arrow: Token![=>],
+    body: Expr,
+    #[allow(unused)]
+    comma: Option<Comma>,
+}
+
+impl Parse for ArmSyntax {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let requires_comma;
+        let arm = ArmSyntax {
+            pat: Pat::parse_multi_with_leading_vert(input)?,
+            eq: input.parse()?,
+            future: input.parse()?,
+            fat_arrow: input.parse()?,
+            body: {
+                let body = Expr::parse_with_earlier_boundary_rule(input)?;
+                requires_comma = requires_comma_to_be_match_arm(&body)?;
+                body
+            },
+            comma: {
+                if requires_comma && !input.is_empty() {
+                    Some(input.parse()?)
+                } else {
+                    input.parse()?
+                }
+            },
+        };
+
+        Ok(arm)
+    }
+}
+
+impl Parse for SelectSyntax {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let mut arms = Vec::new();
+        while !input.is_empty() {
+            arms.push(input.parse()?);
+        }
+
+        Ok(Self { arms })
+    }
+}
+
+fn select(printer: &mut Printer, select_syntax: &SelectSyntax, base_indent: isize) {
     printer.word("{");
     printer.neverbreak();
     printer.cbox(INDENT + base_indent);
@@ -32,7 +98,7 @@ fn select(printer: &mut Printer, select_syntax: &Select, base_indent: isize) {
     printer.word("}");
 }
 
-fn arm(printer: &mut Printer, arm_syntax: &Arm) {
+fn arm(printer: &mut Printer, arm_syntax: &ArmSyntax) {
     printer.ibox(0);
     printer.pat(&arm_syntax.pat);
     printer.word(" = ");
@@ -88,59 +154,6 @@ fn arm(printer: &mut Printer, arm_syntax: &Arm) {
     printer.end();
 }
 
-struct Select {
-    arms: Vec<Arm>,
-}
-
-struct Arm {
-    pat: Pat,
-    #[allow(unused)]
-    eq: Token![=],
-    future: Expr,
-    #[allow(unused)]
-    fat_arrow: Token![=>],
-    body: Expr,
-    #[allow(unused)]
-    comma: Option<Comma>,
-}
-
-impl Parse for Arm {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let requires_comma;
-        let arm = Arm {
-            pat: Pat::parse_multi_with_leading_vert(input)?,
-            eq: input.parse()?,
-            future: input.parse()?,
-            fat_arrow: input.parse()?,
-            body: {
-                let body = Expr::parse_with_earlier_boundary_rule(input)?;
-                requires_comma = requires_comma_to_be_match_arm(&body)?;
-                body
-            },
-            comma: {
-                if requires_comma && !input.is_empty() {
-                    Some(input.parse()?)
-                } else {
-                    input.parse()?
-                }
-            },
-        };
-
-        Ok(arm)
-    }
-}
-
-impl Parse for Select {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let mut arms = Vec::new();
-        while !input.is_empty() {
-            arms.push(input.parse()?);
-        }
-
-        Ok(Self { arms })
-    }
-}
-
 fn requires_comma_to_be_match_arm(expr: &Expr) -> syn::Result<bool> {
     match expr {
         Expr::If(_)
@@ -189,12 +202,11 @@ fn requires_comma_to_be_match_arm(expr: &Expr) -> syn::Result<bool> {
 
 #[cfg(test)]
 mod test {
-
-    use crate::macros::select::Select;
+    use crate::macro_syntax::MacroFactory;
+    use crate::macros::select::SelectFactory;
     use crate::{assert_eq_text, format_file};
 
     use syn::Macro;
-    use syn::parse::{Parse, Parser};
 
     #[test]
     fn test_parse_select_braced_expr() {
@@ -210,7 +222,7 @@ select! {
         "#;
 
         let mac: Macro = syn::parse_str(code).unwrap();
-        let select = Parser::parse2(Select::parse, mac.tokens).unwrap();
+        let _select = SelectFactory::parse(&mac).unwrap();
     }
 
     #[test]
@@ -227,7 +239,7 @@ select! {
         "#;
 
         let mac: Macro = syn::parse_str(code).unwrap();
-        let select = Parser::parse2(Select::parse, mac.tokens).unwrap();
+        let _select = SelectFactory::parse(&mac).unwrap();
     }
 
     #[test]
@@ -241,7 +253,7 @@ select! {
         "#;
 
         let mac: Macro = syn::parse_str(code).unwrap();
-        let select = Parser::parse2(Select::parse, mac.tokens).unwrap();
+        let _select = SelectFactory::parse(&mac).unwrap();
     }
 
     #[test]
@@ -255,7 +267,7 @@ select! {
         "#;
 
         let mac: Macro = syn::parse_str(code).unwrap();
-        let select = Parser::parse2(Select::parse, mac.tokens).unwrap();
+        let _select = SelectFactory::parse(&mac).unwrap();
     }
 
     #[test]
