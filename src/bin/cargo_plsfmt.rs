@@ -21,7 +21,7 @@ fn main() {
             true
         } else {
             found_fmt = x == "plsfmt";
-            x != "fmt"
+            x != "plsfmt"
         }
     });
 
