@@ -3,6 +3,10 @@ name = "plsfmt"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "cargo-plsfmt"
+path = "src/bin/cargo_plsfmt.rs"
+
 [dependencies]
 prettyplease = { version = "0.2.29", git = "https://github.com/allanbrondum/prettyplease.git" }
 syn = { version = "2.0.98", features = ["visit", "parsing"] }
@@ -14,3 +18,4 @@ glob = "0.3.2"
 
 #[patch."https://github.com/allanbrondum/prettyplease.git"]
 #prettyplease = { path = "../prettyplease" }
+
